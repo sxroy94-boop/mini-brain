@@ -12,15 +12,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import math
+
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.graphics import Color, Ellipse, Line, Point
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
 
 try:
     import certifi
@@ -479,6 +483,84 @@ def local_ip():
         s.close()
 
 
+# ---------------------------------------------------------------- Orb (same visual as mobile app)
+STATE_SPEED = {"idle": 10, "listening": 42, "thinking": 115, "speaking": 55, "sleep": 3}
+STATE_AMP = {"idle": 0.03, "listening": 0.07, "thinking": 0.045, "speaking": 0.08, "sleep": 0.01}
+STATE_GLOW = {"idle": 1.0, "listening": 1.6, "thinking": 1.35, "speaking": 1.9, "sleep": 0.4}
+
+
+class Orb(Widget):
+    """JARVIS style pulsing golden rings. Always turns anticlockwise."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.state = "idle"
+        self.t = 0.0
+        self.ang = 0.0
+        self.amp = 0.03
+
+        with self.canvas:
+            self.c_g2 = Color(0.9, 0.5, 0.05, 0.10)
+            self.glow2 = Ellipse()
+            self.c_g1 = Color(1, 0.65, 0.1, 0.18)
+            self.glow1 = Ellipse()
+
+            Color(1, 0.72, 0.15, 0.9)
+            self.ring_out = Line(width=dp(1.6))
+            Color(1, 0.65, 0.1, 0.7)
+            self.ring_mid = Line(width=dp(1.3), dash_length=dp(9), dash_offset=dp(6))
+            Color(1, 0.55, 0.05, 0.55)
+            self.ring_in = Line(width=dp(1.1), dash_length=dp(5), dash_offset=dp(4))
+
+            Color(1, 0.8, 0.3, 0.9)
+            self.ticks = Point(pointsize=dp(1.8))
+
+            Color(1, 0.95, 0.7, 1)
+            self.core = Ellipse()
+        Clock.schedule_interval(self.tick, 1 / 30.0)
+
+    def tick(self, dt):
+        st = self.state
+        self.t += dt
+        self.ang += STATE_SPEED[st] * dt  # positive angle = anticlockwise on screen
+
+        target = STATE_AMP[st]
+        if st == "speaking":
+            target = 0.05 + 0.09 * abs(math.sin(self.t * 8) * math.sin(self.t * 2.6))
+        self.amp += (target - self.amp) * min(1.0, dt * 8)
+        breathe = 1.0 if st == "speaking" else math.sin(self.t * 2.2)
+        scale = 1 + self.amp * breathe
+
+        cx, cy = self.center_x, self.center_y
+        R_ = min(self.width, self.height) * 0.42 * scale
+
+        self.ring_out.circle = (cx, cy, R_)
+        self.ring_mid.circle = (cx, cy, R_ * 0.78)
+        self.ring_mid.dash_offset = self.ang % 100
+        self.ring_in.circle = (cx, cy, R_ * 0.56)
+        self.ring_in.dash_offset = (self.ang * 1.7) % 100
+
+        pts = []
+        for i in range(12):
+            a = math.radians(i * 30 + self.ang)
+            r = R_ * 0.90
+            pts.extend((cx + r * math.cos(a), cy + r * math.sin(a)))
+        self.ticks.points = pts
+
+        g1, g2 = R_ * 1.3, R_ * 1.65
+        self.glow1.pos = (cx - g1, cy - g1)
+        self.glow1.size = (2 * g1, 2 * g1)
+        self.glow2.pos = (cx - g2, cy - g2)
+        self.glow2.size = (2 * g2, 2 * g2)
+        boost = STATE_GLOW[st]
+        self.c_g1.a = min(0.4, 0.16 * boost)
+        self.c_g2.a = min(0.28, 0.10 * boost)
+
+        rc = R_ * 0.12 * (1 + 1.6 * self.amp)
+        self.core.pos = (cx - rc, cy - rc)
+        self.core.size = (2 * rc, 2 * rc)
+
+
 # ---------------------------------------------------------------- HTTP server
 def make_handler(app_ref):
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -548,6 +630,8 @@ class MiniBrainApp(App):
         root.add_widget(
             Label(text="M I N I   B R A I N", color=GOLD, font_size="20sp", size_hint_y=None, height=dp(32))
         )
+        self.orb = Orb(size_hint_y=0.35)
+        root.add_widget(self.orb)
         self.status = Label(text="Starting...", color=(0.6, 0.9, 0.6, 1), font_size="16sp", size_hint_y=None, height=dp(60))
         root.add_widget(self.status)
 
@@ -596,10 +680,16 @@ class MiniBrainApp(App):
 
     # ---------- called from the HTTP server thread (not the UI thread) ----------
     def handle_text(self, text):
+        result = self._route_text(text)
+        Clock.schedule_once(lambda dt: setattr(self.orb, "state", "idle"), 0.6)
+        return result
+
+    def _route_text(self, text):
         if not text:
             return {"action": "say", "spoken": "Ji Boss?", "shown": "Ji Boss?"}
-        kind, payload = self.brain.route(text)
+        Clock.schedule_once(lambda dt: setattr(self.orb, "state", "thinking"))
         Clock.schedule_once(lambda dt: self.add_log("You: %s" % text))
+        kind, payload = self.brain.route(text)
 
         if kind == "weather":
             lang, city = payload
