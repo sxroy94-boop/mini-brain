@@ -7,7 +7,7 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 1.0
 requirements = python3,kivy==2.3.0,certifi
 orientation = portrait
-android.permissions = INTERNET
+android.permissions = INTERNET, WAKE_LOCK, FOREGROUND_SERVICE, POST_NOTIFICATIONS
 android.api = 31
 android.minapi = 24
 android.ndk = 25b
@@ -15,6 +15,7 @@ android.ndk_api = 24
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.allow_backup = True
+services = MiniService:service.py
 
 # Pin p4a to a stable release (same fix used for the mobile app)
 p4a.branch = v2024.01.21
