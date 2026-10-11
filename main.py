@@ -653,7 +653,23 @@ class MiniBrainApp(App):
 
         return root
 
+  def start_brain_service(self):
+    try:
+        from jnius import autoclass
+        Intent = autoclass("android.content.Intent")
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        MiniBrainService = autoclass("org.mini.MiniBrainService")
+        activity = PythonActivity.mActivity
+        intent = Intent(activity, MiniBrainService)
+        if hasattr(activity, "startForegroundService"):
+            activity.startForegroundService(intent)
+        else:
+            activity.startService(intent)
+        self.add_log("(Service started)")
+    except Exception as e:
+        self.add_log("(Service failed: " + str(e) + ")")
     def on_start(self):
+      self.start_brain_sevice()
         self.refresh_ip()
         threading.Thread(target=self.run_server, daemon=True).start()
 
