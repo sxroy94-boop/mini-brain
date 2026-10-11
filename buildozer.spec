@@ -3,7 +3,7 @@ title = mini Brain
 package.name = minibrain
 package.domain = org.mini
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas,json
+source.include_exts = py,png,jpg,kv,atlas,json,java
 version = 1.0
 requirements = python3,kivy==2.3.0,certifi
 orientation = portrait
@@ -15,9 +15,10 @@ android.ndk_api = 24
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.allow_backup = True
-services = MiniService:service.py
+android.add_src = java_src
+android.extra_manifest_xml = ./extra_manifest.xml
 
-# Pin p4a to a stable release (same fix used for the mobile app)
+# Pin p4a to a stable release
 p4a.branch = v2024.01.21
 
 [buildozer]
