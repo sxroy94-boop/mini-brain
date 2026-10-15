@@ -1,0 +1,5 @@
+<service
+    android:name="org.mini.minibrain.TabletService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />
