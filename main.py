@@ -643,6 +643,20 @@ class MiniBrainApp(App):
 
         root.add_widget(styled_button("Refresh IP", size_hint_y=None, height=dp(44), on_release=self.refresh_ip))
 
+        svcrow = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(6))
+        svcrow.add_widget(styled_button("Start Service", on_release=self.start_service))
+        svcrow.add_widget(styled_button("Stop Service", on_release=self.stop_service))
+        root.add_widget(svcrow)
+        root.add_widget(
+            Label(
+                text="Tap Start Service once - it keeps running with a notification\neven after you close this app.",
+                color=(0.6, 0.6, 0.65, 1),
+                font_size="12sp",
+                size_hint_y=None,
+                height=dp(34),
+            )
+        )
+
         root.add_widget(Label(text="Recent requests", color=GOLD, size_hint_y=None, height=dp(24), font_size="13sp"))
         self.scroll = ScrollView()
         self.log = Label(size_hint_y=None, halign="left", valign="top", font_size="14sp", color=(0.8, 0.8, 0.85, 1))
@@ -653,23 +667,7 @@ class MiniBrainApp(App):
 
         return root
 
-  def start_brain_service(self):
-    try:
-        from jnius import autoclass
-        Intent = autoclass("android.content.Intent")
-        PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        MiniBrainService = autoclass("org.mini.MiniBrainService")
-        activity = PythonActivity.mActivity
-        intent = Intent(activity, MiniBrainService)
-        if hasattr(activity, "startForegroundService"):
-            activity.startForegroundService(intent)
-        else:
-            activity.startService(intent)
-        self.add_log("(Service started)")
-    except Exception as e:
-        self.add_log("(Service failed: " + str(e) + ")")
     def on_start(self):
-      self.start_brain_sevice()
         self.refresh_ip()
         threading.Thread(target=self.run_server, daemon=True).start()
 
@@ -680,6 +678,37 @@ class MiniBrainApp(App):
     def run_server(self):
         server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), make_handler(self))
         server.serve_forever()
+
+    # ---------- Java foreground service: keeps this process (and the HTTP
+    # server thread above) alive in the background, with a notification ----------
+    def start_service(self, *_):
+        try:
+            from jnius import autoclass
+
+            Build = autoclass("android.os.Build")
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            TabletService = autoclass("org.mini.minibrain.TabletService")
+            Intent = autoclass("android.content.Intent")
+            intent = Intent(PythonActivity.mActivity, TabletService)
+            if Build.VERSION.SDK_INT >= 26:
+                PythonActivity.mActivity.startForegroundService(intent)
+            else:
+                PythonActivity.mActivity.startService(intent)
+            self.add_log("(background service started - check your notifications)")
+        except Exception as e:
+            self.add_log("(could not start service: %s)" % e)
+
+    def stop_service(self, *_):
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            TabletService = autoclass("org.mini.minibrain.TabletService")
+            Intent = autoclass("android.content.Intent")
+            PythonActivity.mActivity.stopService(Intent(PythonActivity.mActivity, TabletService))
+            self.add_log("(background service stopped)")
+        except Exception as e:
+            self.add_log("(could not stop service: %s)" % e)
 
     def save_key(self, *_):
         key = self.key_inp.text.strip()
